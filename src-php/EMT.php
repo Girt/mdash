@@ -1,8 +1,8 @@
 <?php
 /**
 * Evgeny Muravjev Typograph, http://mdash.ru
-* Version: 3.0 Gold Master
-* Release Date: September 28, 2013
+* Version: 3.5 Gold Master
+* Release Date: July 2, 2015
 * Authors: Evgeny Muravjev & Alexander Drutsa  
 */
 
@@ -12,7 +12,7 @@ require_once("EMT.Tret.php");
 
 /**
  * Основной класс типографа Евгения Муравьёва
- * реализует основные методы запуска и рабыоты типографа
+ * реализует основные методы запуска и работы типографа
  *
  */
 class EMT_Base 
@@ -21,7 +21,7 @@ class EMT_Base
 	private $inited = false;
 
 	/**
-	 * Список Трэтов, которые надо применить к типогрфированию
+	 * Список Трэтов, которые надо применить к типографированию
 	 *
 	 * @var array
 	 */
@@ -80,7 +80,9 @@ class EMT_Base
 	
 	
 	
-	protected $_safe_blocks = array();	
+	protected $_safe_blocks = array();
+	protected $_safe_sequences = array();
+	protected $_safe_sequence_mark = "SAFESEQUENCENUM";
 	
 	
 	/**
@@ -119,12 +121,44 @@ class EMT_Base
      */
     private function _add_safe_block($id, $open, $close, $tag)
     {
-    	$this->_safe_blocks[$id] = array(
+    	$this->_safe_blocks[] = array(
     			'id' => $id,
     			'tag' => $tag,
     			'open' =>  $open,
     			'close' =>  $close,
     		);
+    }
+    
+    /**
+     * Добавление защищенного блока
+     *
+     * @param 	string $type тип последовательности
+     *            0 - URL
+     *            1 - почта
+     * @param 	string $content реальное содержимое
+     * @return  void
+     */
+    private function _add_safe_sequence($type, $content)
+    {
+    	$this->_safe_sequences[] = array(
+    			'type' => $type,
+    			'content' =>  $content,
+    		);
+    }
+    
+    /**
+     * Вычисляем тэг, которого нет в заданном тексте
+     *
+     * @return 	array
+     */
+    protected function detect_safe_mark() {
+    	$seq = $this->_safe_sequence_mark;
+    	$i = 0;
+    	while(strpos($this->_text, $seq) !== false) {
+    		$seq = str_replace("SAFESEQUENCENUM","SAFESEQUENCE".$i."NUM", $this->_safe_sequence_mark);
+    		$i++;
+    	}
+    	$this->_safe_sequence_mark = $seq;
     }
     
     /**
@@ -138,6 +172,16 @@ class EMT_Base
     }
     
     /**
+     * Список защищенных последовательностей
+     *
+     * @return 	array
+     */
+    public function get_all_safe_sequences()
+    {
+    	return $this->_safe_sequences;
+    }
+    
+    /**
      * Удаленного блока по его номеру ключа
      *
      * @param 	string $id идентифиактор защищённого блока 
@@ -145,9 +189,10 @@ class EMT_Base
      */
     public function remove_safe_block($id)
     {
-    	unset($this->_safe_blocks[$id]);
+    	foreach($this->_safe_blocks as $k => $block) {
+    		if($block['id']==$id) unset($this->_safe_blocks[$k]);
+    	}
     }
-    
     
     /**
      * Добавление защищенного блока
@@ -205,7 +250,8 @@ class EMT_Base
     	if (count($this->_safe_blocks)) 
     	{
     		$safeType = true === $way ? "EMT_Lib::encrypt_tag(\$m[2])" : "stripslashes(EMT_Lib::decrypt_tag(\$m[2]))";
-       		foreach ($this->_safe_blocks as $block) 
+    		$safeblocks = true === $way ? $this->_safe_blocks : array_reverse($this->_safe_blocks);
+       		foreach ($safeblocks as $block) 
        		{
         		$text = preg_replace_callback("/({$block['open']})(.+?)({$block['close']})/s",   create_function('$m','return $m[1].'.$safeType . '.$m[3];')   , $text);
         	}
@@ -214,6 +260,81 @@ class EMT_Base
     	return $text;
     }
     
+    /**
+     * Кодирование УРЛа
+     *
+     * @param regex array $m
+     * @return unknown
+     */
+    function safe_sequence_url($m) {
+    	$id = count($this->_safe_sequences);
+    	$this->_add_safe_sequence(0, $m[0]);
+    	return "http://mdash.ru/A0".$this->_safe_sequence_mark.$id."ID";
+    }
+    
+    /**
+     * Кодирование Почты
+     *
+     * @param regex array $m
+     * @return unknown
+     */
+    function safe_sequence_email($m) {
+    	$id = count($this->_safe_sequences);
+    	$this->_add_safe_sequence(1, $m[0]);
+    	return "A1".$this->_safe_sequence_mark.$id."ID@mdash.ru";
+    }
+    
+    /**
+     * Декодирование УРЛа
+     *
+     * @param regex array $m
+     * @return unknown
+     */
+    function unsafe_sequence_url($m) {
+    	return $this->_safe_sequences[$m[1]]['content'];
+    }
+    
+    /**
+     * Декодирование УРЛа с удалением http://
+     *
+     * @param regex array $m
+     * @return unknown
+     */
+    function unsafe_sequence_url_nohttp($m) {
+    	$z = $this->_safe_sequences[$m[1]]['content'];
+    	return preg_replace("~([^:]+)://~", "", $z);
+    }
+    
+    
+    /**
+     * Декодирование Почты
+     *
+     * @param regex array $m
+     * @return unknown
+     */
+    function unsafe_sequence_email($m) {
+    	return $this->_safe_sequences[$m[1]]['content'];
+    }
+    
+    /**
+     * Сохранение защищенных последовательностей
+     *
+     * @param   string $text
+     * @param   bool $safe если true, то содержимое блоков будет сохранено, иначе - раскодировано. 
+     * @return  string
+     */
+    public function safe_sequences($text, $way, $show = true)
+    {
+    	if(true === $way) {
+    		$text = preg_replace_callback(EMT_Lib::url_regex(), array($this, "safe_sequence_url") , $text);
+    		$text = preg_replace_callback(EMT_Lib::email_regex(), array($this, "safe_sequence_email") , $text);
+    	} else {
+    		$text = preg_replace_callback('~http://mdash.ru/A0'.$this->_safe_sequence_mark.'(\d+)ID~ims', array($this, "unsafe_sequence_url") , $text);
+    		$text = preg_replace_callback('~mdash.ru/A0'.$this->_safe_sequence_mark.'(\d+)ID~ims', array($this, "unsafe_sequence_url_nohttp") , $text);
+    		$text = preg_replace_callback('~A1'.$this->_safe_sequence_mark.'(\d+)ID@mdash.ru~ims', array($this, "unsafe_sequence_email") , $text);
+    	}
+    	return $text;
+    }
     
      /**
      * Декодирование блоков, которые были скрыты в момент типографирования
@@ -284,6 +405,8 @@ class EMT_Base
 			$this->add_safe_block('span-notg', '<span class="_notg_start"></span>', '<span class="_notg_end"></span>');
 		}
 		$this->inited = true;
+		
+		$this->detect_safe_mark();
 	}
 	
 	
@@ -292,8 +415,8 @@ class EMT_Base
 	
 	/**
 	 * Инициализация класса, используется чтобы задать список третов или
-	 * спсиок защищённых блоков, которые можно использовать.
-	 * Такде здесь можно отменить защищённые блоки по умлочнаию
+	 * список защищённых блоков, которые можно использовать.
+	 * Также здесь можно отменить защищённые блоки по умлочнаию
 	 *
 	 */
 	public function init()
@@ -338,7 +461,7 @@ class EMT_Base
 	}
 	
 	/**
-	 * Получаем ТРЕТ по идентивикатору, т.е. заванию класса
+	 * Получаем ТРЕТ по идентификатору, т.е. названию класса
 	 *
 	 * @param unknown_type $name
 	 */
@@ -391,6 +514,9 @@ class EMT_Base
 		
 		$this->debug($this, 'init', $this->_text);
 		
+		$this->_text = $this->safe_sequences($this->_text, true);
+		$this->debug($this, 'safe_sequences', $this->_text);
+		
 		$this->_text = $this->safe_blocks($this->_text, true);
 		$this->debug($this, 'safe_blocks', $this->_text);
 		
@@ -399,6 +525,7 @@ class EMT_Base
 		
 		$this->_text = EMT_Lib::clear_special_chars($this->_text);
 		$this->debug($this, 'clear_special_chars', $this->_text);
+		
 		
 		foreach ($atrets as $tret) 		
 		{
@@ -456,6 +583,9 @@ class EMT_Base
 		
 		$this->_text = $this->safe_blocks($this->_text, false);		
 		$this->debug($this, 'unsafe_blocks', $this->_text);
+		
+		$this->_text = $this->safe_sequences($this->_text, false);
+		$this->debug($this, 'unsafe_sequences', $this->_text);
 		
 		if(!$this->disable_notg_replace)
 		{
@@ -537,7 +667,7 @@ class EMT_Base
 	 * @param array $map
 	 * @param boolean $disable если ложно, то $map соотвествует тем правилам, которые надо включить
 	 *                         иначе это список правил, которые надо выключить
-	 * @param boolean $strict строго, т.е. те которые не в списку будут тоже обработаны
+	 * @param boolean $strict строго, т.е. те которые не в списке будут тоже обработаны
 	 */
 	public function set_enable_map($map, $disable = false, $strict = true)
 	{
@@ -646,19 +776,37 @@ class EMT_Base
 	
 	/**
 	 * Установить настройки для тертов и правил
-	 * 	1. если селектор является массивом, то тогда утсановка правил будет выполнена для каждого
+	 * 	1. если селектор является массивом, то тогда установка правил будет выполнена для каждого
 	 *     элемента этого массива, как отдельного селектора.
-	 *  2. Если $key не является массивом, то эта настрока будет проставлена согласно селектору
+	 *  2. Если $key не является массивом, то эта настройка будет проставлена согласно селектору
 	 *  3. Если $key массив - то будет задана группа настроек
 	 *       - если $value массив , то настройки определяются по ключам из массива $key, а значения из $value
 	 *       - иначе, $key содержит ключ-значение как массив  
+	 *  4. $exact_match - если true тогда array selector будет соответсвовать array $key, а не произведению массивов
 	 *
 	 * @param mixed $selector
 	 * @param mixed $key
 	 * @param mixed $value
+	 * @param mixed $exact_match
 	 */
-	public function set($selector, $key , $value = false)
+	public function set($selector, $key , $value = false, $exact_match = false)
 	{
+		if($exact_match && is_array($selector) && is_array($key) && count($selector)==count($key)) {
+			$idx = 0;
+			foreach($key as $x => $y){
+				if(is_array($value))
+				{
+					$kk = $y;
+					$vv = $value[$x];
+				} else {
+					$kk = ( $value ? $y : $x );
+					$vv = ( $value ? $value : $y );
+				}
+				$this->set($selector[$idx], $kk , $vv);
+				$idx++;
+			}
+			return ;
+		}
 		if(is_array($selector)) 
 		{
 			foreach($selector as $val) $this->set($val, $key, $value);
@@ -673,11 +821,12 @@ class EMT_Base
 					$kk = $y;
 					$vv = $value[$x];
 				} else {
-					$kk = $x;
-					$vv = $y;
+					$kk = ( $value ? $y : $x );
+					$vv = ( $value ? $value : $y );
 				}
 				$this->set($selector, $kk, $vv);
 			}
+			return ;
 		}
 		$this->doset($selector, $key, $value);
 	}
@@ -717,10 +866,10 @@ class EMT_Base
 		{
 			if(isset($setupmap['map']))
 			{
-				$ret['map'] = $test['params']['map'];
-				$ret['disable'] = $test['params']['map_disable'];
-				$ret['strict'] = $test['params']['map_strict'];
-				$test['params']['maps'] = array($ret);
+				$ret['map'] = $setupmap['map'];
+				$ret['disable'] = $setupmap['map_disable'];
+				$ret['strict'] = $setupmap['map_strict'];
+				$setupmap['maps'] = array($ret);
 				unset($setupmap['map']);
 				unset($setupmap['map_disable']);
 				unset($setupmap['map_strict']);
@@ -780,8 +929,10 @@ class EMTypograph extends EMT_Base
 		'Nobr.super_nbsp' => 'direct',
 		'Nobr.nbsp_in_the_end' => 'direct',
 		'Nobr.phone_builder' => 'direct',
+		'Nobr.phone_builder_v2' => 'direct',
 		'Nobr.ip_address' => 'direct',
 		'Nobr.spaces_nobr_in_surname_abbr' => 'direct',
+		'Nobr.dots_for_surname_abbr' => 'direct',
 		'Nobr.nbsp_celcius' => 'direct',		
 		'Nobr.hyphen_nowrap_in_small_words' => 'direct',
 		'Nobr.hyphen_nowrap' => 'direct',
@@ -805,8 +956,7 @@ class EMTypograph extends EMT_Base
 		'Number.minus_in_numbers_range' => 'direct',
 		'Number.auto_times_x' => 'direct',
 		'Number.simple_fraction' => 'direct',
-		'Number.math_chars' => 'direct',
-		//'Number.split_number_to_triads' => 'direct',
+		'Number.math_chars' => 'direct',		
 		'Number.thinsp_between_number_triads' => 'direct',
 		'Number.thinsp_between_no_and_number' => 'direct',
 		'Number.thinsp_between_sect_and_number' => 'direct',
@@ -823,7 +973,8 @@ class EMTypograph extends EMT_Base
 		'Space.bracket_fix' => array( 'description' => 'Удаление пробелов внутри скобок, а также расстановка пробела перед скобками', 
 				'selector' => array('Space.nbsp_before_open_quote', 'Punctmark.fix_brackets')),
 				
-		'Abbr.nbsp_money_abbr' => 'direct',		
+		'Abbr.nbsp_money_abbr' => array( 'description' => 'Форматирование денежных сокращений (расстановка пробелов и привязка названия валюты к числу)', 
+				'selector' => array('Abbr.nbsp_money_abbr', 'Abbr.nbsp_money_abbr_rev')),
 		'Abbr.nobr_vtch_itd_itp' => 'direct',		
 		'Abbr.nobr_sm_im' => 'direct',		
 		'Abbr.nobr_acronym' => 'direct',		
@@ -835,7 +986,7 @@ class EMTypograph extends EMT_Base
 		'Abbr.nobr_before_unit_volt' => 'direct',		
 		'Abbr.nbsp_before_unit' => 'direct',		
 		
-		'OptAlign.all' => array( 'description' => 'Inline стили или CSS', 'hide' => true, 'selector' => 'OptAlign.*'),
+		'OptAlign.all' => array( 'description' => 'Все настройки оптического выравнивания', 'hide' => true, 'selector' => 'OptAlign.*'),
 		'OptAlign.oa_oquote' => 'direct',	
 		'OptAlign.oa_obracket_coma' => 'direct',	
 		'OptAlign.oa_oquote_extra' => 'direct',	
@@ -849,7 +1000,9 @@ class EMTypograph extends EMT_Base
 		
 		
 		//'Etc.no_nbsp_in_nobr' => 'direct',		
-		'Etc.unicode_convert' => array('description' => 'Преобразовывать html-сущности в юникод', 'selector' => '*', 'setting' => 'dounicode' , 'disabled' => true),
+		'Etc.unicode_convert' => array('description' => 'Преобразовывать html-сущности в юникод', 'selector' => array('*', 'Etc.nobr_to_nbsp'), 'setting' => array('dounicode','active'), 'exact_selector' => true ,'disabled' => true),
+		'Etc.nobr_to_nbsp' => 'direct',
+		'Etc.split_number_to_triads' => 'direct',
 	
 	);
 	
@@ -858,7 +1011,7 @@ class EMTypograph extends EMT_Base
 	 *
 	 * @return array
 	 *     all    - полный список
-	 *     group  - сгруппрованный по группам
+	 *     group  - сгруппированный по группам
 	 */
 	public function get_options_list()
 	{
@@ -937,7 +1090,7 @@ class EMTypograph extends EMT_Base
 			{
 				$settingname = "active";
 				if(isset($this->all_options[$name]['setting'])) $settingname = $this->all_options[$name]['setting'];
-				$this->set($this->all_options[$name]['selector'], $settingname, $value);
+				$this->set($this->all_options[$name]['selector'], $settingname, $value, isset($this->all_options[$name]['exact_selector']));
 			}
 		}
 		

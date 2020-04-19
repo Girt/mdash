@@ -11,7 +11,7 @@ class EMT_Tret_Punctmark extends EMT_Tret
 	public $rules = array( 
 	 	'auto_comma' => array(
 	 			'description'	=> 'Расстановка запятых перед а, но',
-		 		'pattern' 		=> '/([a-zа-яё])(\s|&nbsp;)(но|а)(\s|&nbsp;)/iu',
+		 		'pattern' 		=> '/([a-zа-яё])(\s|&nbsp;)(но|а)(\s|&nbsp;)/u',
 		 		'replacement' 	=> '\1,\2\3\4'
 	 		), 
 		'punctuation_marks_limit' => array(
@@ -21,8 +21,16 @@ class EMT_Tret_Punctmark extends EMT_Tret
 			), 	
 		'punctuation_marks_base_limit' => array(
 				'description'	=> 'Лишние запятые, двоеточия, точки с запятой',
-				'pattern' 		=> '/([\,]|[\:]|[\;]]){2,}/',
-				'replacement' 	=> '\1'
+				'pattern' 		=> array(
+							'/([\,]|[\:]){2,}/',
+							'/(;){2,}/',
+							'/((,|:);){2,}/',
+							),
+				'replacement' 	=> array(
+							'\1',
+							'\1',
+							'\1',
+							),
 			),
 		'hellip' => array(
 				'description'	=> 'Замена трех точек на знак многоточия',
@@ -55,7 +63,7 @@ class EMT_Tret_Punctmark extends EMT_Tret
 			),
 		'fix_brackets_space' => array(
 				'description'	=> 'Пробел перед открывающей скобочкой',
-				'pattern' 		=> '/([a-zа-яё0-9])(\()/iu',
+				'pattern' 		=> '/([a-zа-яё])(\()/iu',
 				'replacement' 	=> '\1 \2'
 			),			
 		'dot_on_end' => array(

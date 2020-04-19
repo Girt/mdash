@@ -28,7 +28,7 @@ class EMT_Tret_Number extends EMT_Tret
 			),
 		'numeric_sub' => array(
 				'description'	=> 'Нижний индекс',
-				'pattern' 		=> '/([a-zа-яё0-9])\_([\d]{1,3})([^а-яёa-z0-9]|$)/ieu',
+				'pattern' 		=> '/([a-zа-яё0-9])\_([\d]{1,3})([^@а-яёa-z0-9]|$)/ieu',
 				'replacement' 	=> '$m[1] . $this->tag($this->tag($m[2],"small"),"sub") . $m[3]'
 			),
 		'numeric_sup' => array(
@@ -45,15 +45,8 @@ class EMT_Tret_Number extends EMT_Tret
 				'description'	=> 'Математические знаки больше/меньше/плюс минус/неравно',
 				'pattern' 		=> array('/!=/', '/\<=/', '/([^=]|^)\>=/', '/~=/', '/\+-/'),
 				'replacement' 	=> array('&ne;', '&le;', '\1&ge;', '&cong;', '&plusmn;' )
-			),
-			/*
-		'split_number_to_triads' => array(
-				'description'	=> 'Разбиение числа на триады',
-				'cycled'		=> true,
-				'pattern' 		=> '/([0-9])([0-9]{3})([^0-9]|$)/u',
-				'replacement' 	=> '\1&thinsp;\2\3'
-			),
-			*/
+			),			
+				
 		'thinsp_between_number_triads' => array(
 				'description'	=> 'Объединение триад чисел полупробелом',			
 				'pattern' 		=> '/([0-9]{1,3}( [0-9]{3}){1,})(.|$)/ue',

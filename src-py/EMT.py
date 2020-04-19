@@ -3,8 +3,8 @@
 
 ###################################################
 ##  Evgeny Muravjev Typograph, http://mdash.ru   ##
-##  Version: 3.3-py (beta)                       ##
-##  Release Date: May 4, 2014                    ##
+##  Version: 3.5-py                              ##
+##  Release Date: Jyly 2, 2015                   ##
 ##  Authors: Evgeny Muravjev & Alexander Drutsa  ## 
 ###################################################
 
@@ -25,7 +25,7 @@ _typographSpecificTagId = False
 class _EMT_Lib:
 
     _charsTable = {
-        '"'     : {'html' : {'&laquo;', '&raquo;', '&ldquo;', '&lsquo;', '&bdquo;', '&ldquo;', '&quot;', '&#171;', '&#187;'},
+        '"'     : {'html' : {'&laquo;', '&raquo;', '&rdquo;', '&lsquo;', '&bdquo;', '&ldquo;', '&quot;', '&#171;', '&#187;'},
                           'utf8' : {0x201E, 0x201C, 0x201F, 0x201D, 0x00AB, 0x00BB}},
         ' '     : {'html' : {'&nbsp;', '&thinsp;', '&#160;'},
                           'utf8' : {0x00A0, 0x2002, 0x2003, 0x2008, 0x2009}},
@@ -165,10 +165,10 @@ class _EMT_Lib:
     def safe_tag_chars(self, text, way):
         if (way):
              #OK:
-            text = re.sub('(\</?)(.+?)(\>)', lambda m: m.group(1)+(u"%%___" if m.group(2).strip()[0:1] == u'a' else u"") + EMT_Lib.encrypt_tag(m.group(2).strip()) + m.group(3), text, 0, re.S |re.U)        
+            text = re.sub('(\</?)([^<>]+?)(\>)', lambda m: m.group(0) if (len(m.group(1))==1 and m.group(2).strip()[0:1] == '-' and m.group(2).strip()[1:2] != '-') else  (m.group(1)+(u"%%___" if m.group(2).strip()[0:1] == u'a' else u"") + EMT_Lib.encrypt_tag(m.group(2).strip()) + m.group(3)), text, 0, re.S |re.U)        
         else:
              #OK:
-            text = re.sub('(\</?)(.+?)(\>)', lambda m: m.group(1)+(EMT_Lib.decrypt_tag(m.group(2).strip()[4:]) if m.group(2).strip()[0:3] == u'%%___' else EMT_Lib.decrypt_tag(m.group(2).strip())) + m.group(3), text, 0, re.S|re.U)        
+            text = re.sub('(\</?)([^<>]+?)(\>)', lambda m: m.group(0) if (len(m.group(1))==1 and m.group(2).strip()[0:1] == '-' and m.group(2).strip()[1:2] != '-') else  (m.group(1)+(EMT_Lib.decrypt_tag(m.group(2).strip()[4:]) if m.group(2).strip()[0:3] == u'%%___' else EMT_Lib.decrypt_tag(m.group(2).strip())) + m.group(3)), text, 0, re.S|re.U)        
         return text
 
 
@@ -288,13 +288,13 @@ class _EMT_Lib:
 
     def process_selector_pattern(self, pattern): #TODO: &$pattern - '&' couldn't work
         if(pattern==False):
-            return
+            return False
         #pattern = preg_quote(pattern , '/') #TODO 
         pattern = pattern.replace("*", "[a-z0-9_\-]*") #TODO 
         return pattern
 
     def test_pattern(self, pattern, text):
-        if(pattern == False):
+        if(pattern == False or pattern == None):
             return True
     
         return re.match(pattern, text) #TODO 
@@ -564,8 +564,8 @@ class _EMT_Lib:
 # @return string
 #/
     def html_char_entity_to_unicode(self, entity):
-        if(entity in html4_char_ents):
-            return EMT_Lib.getUnicodeChar(html4_char_ents[entity])
+        if(EMT_Lib.html4_char_ents.get(entity)):
+            return unichr(EMT_Lib.html4_char_ents[entity])
         
         return False
 
@@ -576,10 +576,10 @@ class _EMT_Lib:
 #/
     def convert_html_entities_to_unicode(self, text):  #TODO: &$text - '&' couldn't work
         text = re.sub("\&#([0-9]+)\;", 
-                lambda m: EMT_Lib.getUnicodeChar(int(m.group(1)))
+                lambda m: unichr(int(m.group(1)))
                 , text) #TODO
         text = re.sub("\&#x([0-9A-F]+)\;", 
-                lambda m: EMT_Lib.getUnicodeChar(int(m.group(1),16))
+                lambda m: unichr(int(m.group(1),16))
                 , text) #TODO
         text = re.sub("\&([a-zA-Z0-9]+)\;", 
                 lambda m: EMT_Lib.html_char_entity_to_unicode(m.group(1)) if  EMT_Lib.html_char_entity_to_unicode(m.group(1)) else m.group(0)
@@ -696,6 +696,27 @@ class _EMT_Lib:
     
             return re._expand(pattern, _m(m), replacement)
         return re.sub(pattern, _r, string, count , flags)
+    
+    def split_number(self, num):
+        repl = ""
+        for i in range(len(num),-1,-3):
+            if i-3>=0:
+                repl = ("&thinsp;" if i>3 else "") + num[i-3:i] + repl
+            else:
+                repl = num[0:i] + repl
+        return repl
+     
+	# https://mathiasbynens.be/demo/url-regex
+	# @gruber v2 (218 chars)
+    def url_regex(self):
+        #return u"""(?i)\b((?:[a-z][\w-]+:(?:/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))"""
+        return u"""((?:[a-z][\w-]+:(?:\/{1,3}|[a-z0-9%])|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}\/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:'".,<>?«»“”‘’]))"""
+	
+	# https://emailregex.com/
+    def email_regex(self):
+        z = u"""(?:[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])"""
+        return z
+	
     
 EMT_Lib = _EMT_Lib()
 
@@ -1150,8 +1171,8 @@ class EMT_Tret:
 
 # /**
 # * Evgeny Muravjev Typograph, http://mdash.ru
-# * Version: 3.0 Gold Master
-# * Release Date: September 28, 2013
+# * Version: 3.5 Gold Master
+# * Release Date: July 2, 2015
 # * Authors: Evgeny Muravjev & Alexander Drutsa  
 # */
 
@@ -1190,7 +1211,9 @@ class EMT_Base:
         self.remove_notg = False
         
         self.settings = {}
-        self._safe_blocks = {}	
+        self._safe_blocks = []	
+        self._safe_sequences = []	
+        self._safe_sequence_mark = u"SAFESEQUENCENUM";
 
     def log(self, xstr, data = None):
         if not self.logging:
@@ -1257,12 +1280,40 @@ class EMT_Base:
     # * @return  void
     # */
     def _add_safe_block(self, xid, xopen, close, tag):
-        self._safe_blocks[xid] = {
+        self._safe_blocks.append({
                     'id' : xid,
                     'tag' : tag,
                     'open' :  xopen,
                     'close' :  close
-            }
+            })
+            
+    # /**
+    # * Добавление защищенного блока
+    # *
+    # * @param 	string $type тип последовательности
+    # *            0 - URL
+    # *            1 - почта
+    # * @param 	string $content реальное содержимое
+    # * @return  void
+    # */
+    def _add_safe_sequence(self, type, content):
+        self._safe_sequences.append({
+                    'type' : type,
+                    'content' :  content
+            })
+    
+    # /**
+    # * Вычисляем тэг, которого нет в заданном тексте
+    # *
+    # * @return 	array
+    # */
+    def detect_safe_mark(self):
+    	seq = self._safe_sequence_mark
+    	i = 0
+    	while self._text.find(seq) != -1:
+    		seq = EMT_Lib.str_replace(u"SAFESEQUENCENUM",u"SAFESEQUENCE"+str(i)+u"NUM", self._safe_sequence_mark);
+    		i += 1
+    	self._safe_sequence_mark = seq
     
     # /**
     # * Список защищенных блоков
@@ -1273,13 +1324,28 @@ class EMT_Base:
        return self._safe_blocks
     
     # /**
+    # * Список защищенных последовательностей
+    # *
+    # * @return 	array
+    # */
+    def get_all_safe_sequences(self):
+    	return self._safe_sequences
+    
+    # /**
     # * Удаленного блока по его номеру ключа
     # *
     # * @param 	string $id идентифиактор защищённого блока 
     # * @return  void
     # */
     def remove_safe_block(self, xid):
-       del self._safe_blocks[xid]
+        i = 0
+        for x in self._safe_blocks:            
+            if x['id'] == xid:
+                break
+            i += 1
+        if i == len(self._safe_blocks):
+            return
+        del self._safe_blocks[i]
     
     
     # /**
@@ -1328,13 +1394,100 @@ class EMT_Base:
     def safe_blocks(self, text, way, show = True):
         if len(self._safe_blocks): 
             safeType =  "EMT_Lib.encrypt_tag(m.group(2))" if True == way else "stripslashes(EMT_Lib.decrypt_tag(m.group(2)))"
+            selfblocks = self._safe_blocks
+            if not way:
+                selfblocks.reverse()
             def safereplace(m):
                 return m.group(1)+(EMT_Lib.encrypt_tag(m.group(2)) if True == way else EMT_Lib.decrypt_tag(m.group(2)).replace("\\n","\n").replace("\\r","\n").replace("\\",""))+m.group(3)
-            for idx in self._safe_blocks:
-                block = self._safe_blocks[idx]
+            for idx in selfblocks:
+                block = idx
                 #text = EMT_Lib.preg_replace(u"/("+block['open']+u")(.+?)("+block['close']+u")/ue", 'm.group(1)+' + safeType + '+m.group(3)', text)
                 text = re.sub(u"("+block['open']+u")(.+?)("+block['close']+u")", safereplace, text, 0, re.U)
         return text
+    
+    
+    # /**
+    # * Кодирование УРЛа
+    # *
+    # * @param regex array $m
+    # * @return unknown
+    # */
+    def safe_sequence_url(self, m):
+    	id = len(self._safe_sequences);
+    	self._add_safe_sequence(0, m.group(0));
+    	return u"http://mdash.ru/A0"+self._safe_sequence_mark+str(id)+u"ID";
+    
+    # /**
+    # * Кодирование Почты
+    # *
+    # * @param regex array $m
+    # * @return unknown
+    # */
+    def safe_sequence_email(self, m):
+    	id = len(self._safe_sequences);
+    	self._add_safe_sequence(1, m.group(0));
+    	return u"A1"+self._safe_sequence_mark+str(id)+u"ID@mdash.ru";
+     
+    # /**
+    # * Декодирование УРЛа
+    # *
+    # * @param regex array $m
+    # * @return unknown
+    # */
+    def unsafe_sequence_url(self, m):
+    	return self._safe_sequences[int(m.group(1))]['content'];
+    
+    # /**
+    # * Декодирование УРЛа с удалением http://
+    # *
+    # * @param regex array $m
+    # * @return unknown
+    # */
+    def unsafe_sequence_url_nohttp(self, m):
+    	z = self._safe_sequences[int(m.group(1))]['content'];
+    	return re.sub(u"([^:]+)://", "", z);
+    
+    
+    # /**
+    # * Декодирование Почты
+    # *
+    # * @param regex array $m
+    # * @return unknown
+    # */
+    def unsafe_sequence_email(self, m):
+    	return self._safe_sequences[int(m.group(1))]['content'];
+    
+    # /**
+    # * Сохранение защищенных последовательностей
+    # *
+    # * @param   string $text
+    # * @param   bool $safe если true, то содержимое блоков будет сохранено, иначе - раскодировано. 
+    # * @return  string
+    # */
+    def safe_sequences(self, text, way, show = True):
+    	if way:
+            def repl1(m):
+                return self.safe_sequence_url(m) #text = preg_replace_callback(EMT_Lib.url_regex(), repl1, text);
+            text = re.sub(EMT_Lib.url_regex(), repl1, text, 0, re.U | re.I | re.S)
+            
+            def repl2(m):
+                return self.safe_sequence_email(m) #text = preg_replace_callback(EMT_Lib::email_regex(), array($this, "safe_sequence_email") , $text);
+            text = re.sub(EMT_Lib.email_regex(), repl2, text, 0, re.U | re.I | re.S)
+            
+            
+    	else:
+            def repl3(m):
+                return self.unsafe_sequence_url(m) #$text = preg_replace_callback('~http://mdash.ru/A0'.$this->_safe_sequence_mark.'(\d+)ID~ims', array($this, "unsafe_sequence_url") , $text);
+            text = re.sub(u'http://mdash.ru/A0'+self._safe_sequence_mark+u'(\d+)ID', repl3, text, 0, re.U | re.I | re.S)
+            def repl4(m):
+                return self.unsafe_sequence_url_nohttp(m) #$text = preg_replace_callback('~mdash.ru/A0'.$this->_safe_sequence_mark.'(\d+)ID~ims', array($this, "unsafe_sequence_url_nohttp") , $text);
+            text = re.sub(u'mdash.ru/A0'+self._safe_sequence_mark+u'(\d+)ID', repl4, text, 0, re.U | re.I | re.S)
+            def repl5(m):
+                return self.unsafe_sequence_email(m) #$text = preg_replace_callback('~A1'.$this->_safe_sequence_mark.'(\d+)ID@mdash.ru~ims', array($this, "unsafe_sequence_email") , $text);
+            text = re.sub(u'A1'+self._safe_sequence_mark+u'(\d+)ID@mdash.ru', repl5, text, 0, re.U | re.I | re.S)
+    		
+    	return text
+    
     
     
     # /**
@@ -1381,6 +1534,8 @@ class EMT_Base:
             self.add_safe_tag('notg')
             self.add_safe_block('span-notg', '<span class="_notg_start"></span>', '<span class="_notg_end"></span>')
         self.inited = True
+        
+        self.detect_safe_mark()
     
     
     
@@ -1469,6 +1624,9 @@ class EMT_Base:
         
         self.debug(self, 'init', self._text)
         
+        self._text = self.safe_sequences(self._text, True)
+        self.debug(self, 'safe_sequences', self._text)
+        
         self._text = self.safe_blocks(self._text, True)
         self.debug(self, 'safe_blocks', self._text)
         
@@ -1527,6 +1685,9 @@ class EMT_Base:
         
         self._text = self.safe_blocks(self._text, False)	
         self.debug(self, 'unsafe_blocks', self._text)
+        
+        self._text = self.safe_sequences(self._text, False)	
+        self.debug(self, 'unsafe_sequences', self._text)
         
         if not self.disable_notg_replace:
             repl = ['<span class="_notg_start"></span>', '<span class="_notg_end"></span>']
@@ -1708,26 +1869,55 @@ class EMT_Base:
     # *  3. Если $key массив - то будет задана группа настроек
     # *       - если $value массив , то настройки определяются по ключам из массива $key, а значения из $value
     # *       - иначе, $key содержит ключ-значение как массив  
+	# *  4. $exact_match - если true тогда array selector будет соответсвовать array $key, а не произведению массивов
     # *
     # * @param mixed $selector
     # * @param mixed $key
     # * @param mixed $value
+	# * @param mixed $exact_match
     # */
-    def set(self, selector, key , value = False):
-        if isinstance(selector, (list,tuple)):
-            for val in selector:
-                self.set(val, key, value)
-            return
-        if isinstance(selector, dict):
-            for x in key:
-                y = key[x]
+    def set(self, selector, key , value = False, exact_match = False):
+        if exact_match and isinstance(selector, (list,tuple,set)) and isinstance(key, (list,tuple,dict,set)) and len(selector)==len(key):
+            ind = 0
+            for xx in key:
+                if isinstance(key, dict):
+                    x = xx
+                    y = key[x]
+                else:
+                    x = ind
+                    y = xx
                 if isinstance(value, dict):
                     kk = y
                     vv = value[x]
                 else:
-                    kk = x
-                    vv = y
+                    kk = y if value else x ;
+                    vv = value if value else y ;
+                self.set(selector[ind], kk, vv)
+                ind += 1
+            return 
+        if isinstance(selector, (list,tuple,set)):
+            for val in selector:
+                self.set(val, key, value)
+            return
+        if isinstance(key, (list,tuple,dict,set)):
+            ind = 0
+            for xx in key:
+                if isinstance(key, dict):
+                    x = xx
+                    y = key[x]
+                else:
+                    x = ind
+                    y = xx
+                if isinstance(value, dict):
+                    kk = y
+                    vv = value[x]
+                else:
+                    kk = y if value else x ;
+                    vv = value if value else y ;
+				
                 self.set(selector, kk, vv)
+                ind += 1
+            return 
         self.doset(selector, key, value)
     
     
@@ -1810,8 +2000,10 @@ class EMTypograph(EMT_Base):
                 'Nobr.super_nbsp' : 'direct',
                 'Nobr.nbsp_in_the_end' : 'direct',
                 'Nobr.phone_builder' : 'direct',
+                'Nobr.phone_builder_v2' : 'direct',
                 'Nobr.ip_address' : 'direct',
                 'Nobr.spaces_nobr_in_surname_abbr' : 'direct',
+                'Nobr.dots_for_surname_abbr' : 'direct',                
                 'Nobr.nbsp_celcius' : 'direct',		
                 'Nobr.hyphen_nowrap_in_small_words' : 'direct',
                 'Nobr.hyphen_nowrap' : 'direct',
@@ -1851,9 +2043,12 @@ class EMTypograph(EMT_Base):
                 'Space.clear_before_after_punct' : { 'description' : 'Удаление пробелов перед и после знаков препинания в предложении', 'selector' : 'Space.remove_space_before_punctuationmarks'},
                 'Space.autospace_after' : { 'description' : 'Расстановка пробелов после знаков препинания', 'selector' : 'Space.autospace_after_*'},
                 'Space.bracket_fix' : { 'description' : 'Удаление пробелов внутри скобок, а также расстановка пробела перед скобками', 
-                                    'selector' : {'Space.nbsp_before_open_quote', 'Punctmark.fix_brackets'}
-                                },                            
-                'Abbr.nbsp_money_abbr' : 'direct',		
+                                    'selector' : ['Space.nbsp_before_open_quote', 'Punctmark.fix_brackets']
+                                },             
+
+                'Abbr.nbsp_money_abbr' : { 'description' : 'Форматирование денежных сокращений (расстановка пробелов и привязка названия валюты к числу)', 
+                                    'selector' : ['Abbr.nbsp_money_abbr', 'Abbr.nbsp_money_abbr_rev']
+                                },    
                 'Abbr.nobr_vtch_itd_itp' : 'direct',		
                 'Abbr.nobr_sm_im' : 'direct',		
                 'Abbr.nobr_acronym' : 'direct',		
@@ -1878,7 +2073,8 @@ class EMTypograph(EMT_Base):
                 
                 
                 #'Etc.no_nbsp_in_nobr' : 'direct',		
-                'Etc.unicode_convert' : {'description' : 'Преобразовывать html-сущности в юникод', 'selector' : '*', 'setting' : 'dounicode' , 'disabled' : True},
+                'Etc.unicode_convert' : {'description' : 'Преобразовывать html-сущности в юникод', 'selector' : ['*', 'Etc.nobr_to_nbsp'], 'setting' : ['dounicode','active'], 'exact_selector' : True ,'disabled': True},
+				'Etc.nobr_to_nbsp' : 'direct',
         }
         
         
@@ -1963,7 +2159,7 @@ class EMTypograph(EMT_Base):
                 settingname = "active"
                 if self.all_options[name].has_key('setting'):
                     settingname = self.all_options[name]['setting']
-                self.set(self.all_options[name]['selector'], settingname, value)
+                self.set(self.all_options[name]['selector'], settingname, value, self.all_options[name].get('exact_selector'))
         
         if name == "OptAlign.layout":
             if value == "style":
